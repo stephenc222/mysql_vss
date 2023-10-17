@@ -4,7 +4,7 @@ MySQL VSS Plugin
 A MySQL plugin to store and query vector embeddings
 */
 
-#include "mysql_vss.h"
+#include "plugin/mysql_vss/include/mysql_vss.h"
 #include <mysql/plugin.h>
 
 // Plugin initialization function

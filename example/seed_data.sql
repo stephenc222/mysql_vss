@@ -4,6 +4,14 @@ CREATE DATABASE IF NOT EXISTS wordpress;
 -- Use the wordpress database
 USE wordpress;
 
+-- our embeddings table (for our example app)
+CREATE TABLE IF NOT EXISTS embeddings (
+    ID INT PRIMARY KEY,
+    vector JSON NOT NULL,
+    original_text TEXT NOT NULL
+    -- Any other related fields
+);
+
 -- Check if the wp_posts table exists, if not, create it
 CREATE TABLE IF NOT EXISTS wp_posts (
     ID INT PRIMARY KEY,

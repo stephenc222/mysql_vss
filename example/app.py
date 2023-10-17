@@ -1,4 +1,6 @@
 import mysql.connector
+import json
+from embedding_util import generate_embeddings
 
 # Database connection parameters
 db_config = {
@@ -9,32 +11,55 @@ db_config = {
     "port": 3306
 }
 
-# SQL queries to execute
-sql_queries = [
-    "CREATE FUNCTION IF NOT EXISTS vss_version RETURNS STRING SONAME 'mysql_vss.so';",
-    "CREATE FUNCTION IF NOT EXISTS vss_search RETURNS INT SONAME 'mysql_vss.so';",
-    "SELECT CAST(vss_version() AS CHAR(100));",
-    "SELECT * FROM wp_posts ORDER BY ID LIMIT 1;"
-]
-
-
 # Connect to the database
 try:
     db_connection = mysql.connector.connect(**db_config)
     cursor = db_connection.cursor()
 
-    # Execute the query
-    for sql_query in sql_queries:
-        # Execute the query
-        cursor.execute(sql_query)
+    # Fetch each post content from the wp_posts table
+    cursor.execute("SELECT ID, post_content FROM wp_posts;")
+    records = cursor.fetchall()
 
-        # If it is a SELECT query, fetch and display the results
-        if sql_query.strip().upper().startswith("SELECT"):
-            record = cursor.fetchone()
-            if record:
-                print("Result:", record[0])
-            else:
-                print("No records found")
+    for record in records:
+        post_id, post_content = record
+        # Generate a vector embedding for the post content
+        embedding = generate_embeddings(post_content)
+
+        # Insert the generated embedding into the embeddings table
+        insert_query = """
+        INSERT INTO embeddings (ID, vector, original_text)
+        VALUES (%s, %s, %s);
+        """
+        cursor.execute(
+            insert_query, (post_id, json.dumps(embedding), post_content))
+
+    # Commit the changes to the database
+    db_connection.commit()
+
+    # Generate an embedding for the query
+    query_embedding = generate_embeddings(
+        "Do you have any content about sea creatures?")
+
+    # Use the combined SQL query to fetch post content, its embedding, and compute the
+    # cosine similarity score, then sort the results
+    combined_query = f"""
+    SELECT 
+        ID, 
+        original_text, 
+        vss_search('{json.dumps(query_embedding)}', vector) AS similarity_score 
+    FROM 
+        embeddings
+    ORDER BY 
+        similarity_score DESC;
+    """
+    cursor.execute(combined_query)
+    sorted_results = cursor.fetchall()
+
+    for result in sorted_results:
+        post_id, original_text, similarity_score = result
+        print(f"Post ID: {post_id}, Similarity Score: {similarity_score}")
+        print(original_text)
+        print("--------------------------------------------------")
 
 except mysql.connector.Error as err:
     print("Error:", err)
