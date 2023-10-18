@@ -1,1 +1,22 @@
 __pycache__
+
+mysql-server
+
+# Ignore CMake build files
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+*.make
+*.cmake
+
+# Ignore generated libraries and binaries
+*.a
+*.so
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Additional logs and temporary files
+*.log
