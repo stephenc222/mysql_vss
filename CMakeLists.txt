@@ -12,14 +12,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Source files for the plugin
 set(SOURCE_FILES 
+    src/annoy_service.cc
     src/mysql_vss.cc 
     src/vss_search.cc
     src/vss_version.cc
+    src/vss_update.cc
 )
 
 # Include directories
 include_directories(
     ${CMAKE_BINARY_DIR}/build
+    ${CMAKE_SOURCE_DIR}/src/include
     /usr/local/opt/openssl/include
     ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src
     ${CMAKE_SOURCE_DIR}/src/vendor/annoy-1.17.3/src
