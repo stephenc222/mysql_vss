@@ -1,109 +1,204 @@
 #include <math.h>
-#include <mysql/plugin.h>
-#include "jansson.h" // For JSON parsing
+#include "mysql/plugin.h"
+#include "mysql.h"
+#include "jansson.h"
+#include "annoylib.h"
+#include "kissrandom.h"
+#include <fstream>
 
 // TODO: how to make this variable length according to a user's embedding model
 // This is the number of dimensions for the GTE-base embedding model
+#ifndef EMBEDDING_DIM
 #define EMBEDDING_DIM 768
+#endif
 
 extern "C"
 {
-  // Helper function to compute dot product of two vectors
-  double dot_product(double *v1, double *v2, int len)
+  using namespace Annoy;
+
+  // TODO: consider allocate memory for this index structure in the plugin not this UDF?
+  // To be able to directly deallocate on uninstall plugin?
+  // Global Annoy index variable
+  AnnoyIndex<int, double, Angular, Kiss32Random, AnnoyIndexSingleThreadedBuildPolicy> *annoy_index = nullptr;
+
+  void populate_annoy_from_db()
   {
-    double sum = 0.0;
-    for (int i = 0; i < len; i++)
+    MYSQL *conn;
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    // Initialize MySQL client library
+    mysql_library_init(0, NULL, NULL);
+
+    // Connect to database
+    conn = mysql_init(NULL);
+    if (conn == NULL)
     {
-      sum += v1[i] * v2[i];
+      // Handle error
+      fprintf(stderr, "mysql_init() failed\n");
+      return;
     }
-    return sum;
+
+    // TODO: refactor the database connection to either:
+    // 1. use the internal MySQL API to perform a SQL query
+    // 2. Read from a reliable configuration source to authenticate this connection
+    // FIXME: regardless of how this query is handled, ensure that any errors are handled
+    // Could be fatal to the MySQL server otherwise
+    if (mysql_real_connect(conn, "localhost", "root", "password1234", "wordpress", 33060, NULL, 0) == NULL)
+    {
+      // Handle error
+      fprintf(stderr, "mysql_real_connect() failed\n");
+      mysql_close(conn);
+      return;
+    }
+
+    // Execute SQL query to fetch data
+    if (mysql_query(conn, "SELECT vector FROM embeddings"))
+    {
+      // Handle error
+      fprintf(stderr, "SELECT error: %s\n", mysql_error(conn));
+      mysql_close(conn);
+      return;
+    }
+
+    res = mysql_store_result(conn);
+    if (res == NULL)
+    {
+      // Handle error
+      fprintf(stderr, "mysql_store_result() failed\n");
+      mysql_close(conn);
+      return;
+    }
+
+    int item_index = 0;
+    while ((row = mysql_fetch_row(res)))
+    {
+      // Assuming row[0] is a JSON string of the vector
+      json_t *root;
+      json_error_t error;
+
+      root = json_loads(row[0], &error);
+      if (!root)
+      {
+        fprintf(stderr, "Error parsing JSON input: %s\n", error.text);
+        continue; // Go to the next row
+      }
+
+      double item_data[EMBEDDING_DIM];
+      for (int i = 0; i < EMBEDDING_DIM; i++)
+      {
+        if (!json_is_real(json_array_get(root, i)))
+        {
+          fprintf(stderr, "Invalid or missing values in JSON arrays.\n");
+          break; // Break from the loop processing this embedding
+        }
+        item_data[i] = json_real_value(json_array_get(root, i));
+      }
+
+      annoy_index->add_item(item_index, item_data);
+      item_index++;
+
+      // Clean up the parsed JSON object
+      json_decref(root);
+    }
+
+    // Cleanup
+    mysql_free_result(res);
+    mysql_close(conn);
+    mysql_library_end();
   }
 
-  // Helper function to compute magnitude of a vector
-  double magnitude(double *v, int len)
+  double vss_search(UDF_INIT *initid, UDF_ARGS *args,
+                    char *is_null, char *error)
   {
-    double sum = 0.0;
-    for (int i = 0; i < len; i++)
-    {
-      sum += v[i] * v[i];
-    }
-    return sqrt(sum);
-  }
 
-  double vss_search(UDF_INIT *initid, UDF_ARGS *args, char *is_null,
-                    char *error)
-  {
-    if (args->arg_count != 2)
+    if (args->arg_count != 1)
     {
-      strcpy(error, "Two string arguments (vectors) are required.");
+      strcpy(error, "One string argument (vector) is required.");
       *is_null = 1;
       return 0.0;
     }
 
-    // Parse the JSON vectors
-    json_t *root1, *root2;
-    json_error_t error1, error2;
+    // Parse the JSON vector
+    json_t *root;
+    json_error_t error1;
 
-    root1 = json_loads(args->args[0], &error1);
-    root2 = json_loads(args->args[1], &error2);
+    root = json_loads(args->args[0], &error1);
 
-    if (!root1 || !root2)
+    if (!root)
     {
       strcpy(error, "Error parsing JSON input.");
       *is_null = 1;
       return 0.0;
     }
 
-    // model
-    double v1[EMBEDDING_DIM];
-    double v2[EMBEDDING_DIM];
+    // Convert JSON vector to model
+    double v[EMBEDDING_DIM];
 
-    // Extract values from the parsed JSON and validate the arrays
     for (int i = 0; i < EMBEDDING_DIM; i++)
     {
-      if (!json_is_real(json_array_get(root1, i)) ||
-          !json_is_real(json_array_get(root2, i)))
+      if (!json_is_real(json_array_get(root, i)))
       {
-        strcpy(error, "Invalid or missing values in JSON arrays.");
+        strcpy(error, "Invalid or missing values in JSON array.");
         *is_null = 1;
-        json_decref(root1);
-        json_decref(root2);
+        json_decref(root);
         return 0.0;
       }
-      v1[i] = json_real_value(json_array_get(root1, i));
-      v2[i] = json_real_value(json_array_get(root2, i));
+      v[i] = json_real_value(json_array_get(root, i));
     }
 
-    // Clean up the parsed JSON objects
-    json_decref(root1);
-    json_decref(root2);
+    // Clean up the parsed JSON object
+    json_decref(root);
 
-    // Compute cosine similarity
-    double dot = dot_product(v1, v2, EMBEDDING_DIM);
-    double mag_v1 = magnitude(v1, EMBEDDING_DIM);
-    double mag_v2 = magnitude(v2, EMBEDDING_DIM);
-    double similarity = dot / (mag_v1 * mag_v2);
-    return similarity;
+    // Use Annoy index to get the most similar vector
+
+    std::vector<int> closest_items;
+    // std::vector<double> distances; // If you want the distances, otherwise this can be omitted
+    annoy_index->get_nns_by_vector(v, 1, -1, &closest_items, NULL);
+    int closest_item = closest_items[0];
+
+    return (double)closest_item; // For this example, we return the index of the most similar item
   }
 
   bool vss_search_init(UDF_INIT *initid, UDF_ARGS *args, char *message)
   {
-    if (args->arg_count != 2)
+    if (args->arg_count != 1)
     {
-      strcpy(message, "Two string arguments (vectors) are required.");
+      strcpy(message, "One string argument (vector) is required.");
       return 1; // Indicate error
     }
-    // Initialize memory for the result string
-    initid->ptr =
-        (char *)malloc(50); // allocate for string representation of double
-    return (initid->ptr == NULL) ? 1 : 0;
+
+    // Ensure the Annoy index is loaded
+    if (!annoy_index)
+    {
+      char const *annoyIndexPath = "mysql_vss_annoy.index";
+      annoy_index = new AnnoyIndex<int, double, Angular, Kiss32Random, AnnoyIndexSingleThreadedBuildPolicy>(EMBEDDING_DIM);
+      std::ifstream ifile(annoyIndexPath);
+
+      // Try loading the index from disk
+      if (!ifile || !annoy_index->load(annoyIndexPath))
+      {
+        strcpy(message, "Error loading Annoy index.");
+        // If loading failed, populate the index from the database
+        populate_annoy_from_db();
+
+        // Build the index
+        annoy_index->build(EMBEDDING_DIM);
+
+        // Save the index to disk
+        if (!annoy_index->save(annoyIndexPath))
+        {
+          strcpy(message, "Error saving Annoy index.");
+          return 1; // Indicate error
+        }
+      }
+    }
+
+    return 0; // Indicate success
   }
 
   void vss_search_deinit(UDF_INIT *initid)
   {
-    if (initid->ptr)
-    {
-      free(initid->ptr);
-    }
+    return; // Indicate success
   }
 }

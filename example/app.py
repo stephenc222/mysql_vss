@@ -44,22 +44,13 @@ try:
     # cosine similarity score, then sort the results
     combined_query = f"""
     SELECT 
-        ID, 
-        original_text, 
-        vss_search('{json.dumps(query_embedding)}', vector) AS similarity_score 
-    FROM 
-        embeddings
-    ORDER BY 
-        similarity_score DESC;
+        vss_search('{json.dumps(query_embedding)}') AS matched_index
     """
-    cursor.execute(combined_query)
-    sorted_results = cursor.fetchall()
 
-    for result in sorted_results:
-        post_id, original_text, similarity_score = result
-        print(f"Post ID: {post_id}, Similarity Score: {similarity_score}")
-        print(original_text)
-        print("--------------------------------------------------")
+    cursor.execute(combined_query)
+    result = cursor.fetchone()
+    print(f"Matched index from Annoy: {result[0]}")
+
 
 except mysql.connector.Error as err:
     print("Error:", err)

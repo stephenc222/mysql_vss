@@ -1,12 +1,12 @@
 #include <mysql/plugin.h>
+#include "config.h" 
 
 extern "C"
 {
   char *vss_version(UDF_INIT *initid, UDF_ARGS *args, char *result,
                     unsigned long *length, char *is_null, char *error)
   {
-    // TODO: proper version handling
-    const char *version = "0.0.1";
+    const char *version = MYSQL_VSS_VERSION;
     *length = strlen(version);
     strcpy(result, version);
     result[*length] = '\0';

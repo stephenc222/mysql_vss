@@ -1,0 +1,1 @@
+cmake . && make && mv ./libmysql_vss.so ./build/libmysql_vss.so

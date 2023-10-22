@@ -1,0 +1,3 @@
+#pragma once
+
+#define MYSQL_VSS_VERSION "@MYSQL_VSS_VERSION@"
