@@ -8,7 +8,8 @@ USE wordpress;
 CREATE TABLE IF NOT EXISTS embeddings (
     ID INT PRIMARY KEY,
     vector JSON NOT NULL,
-    original_text TEXT NOT NULL
+    original_text TEXT NOT NULL,
+    annoy_index INT
     -- Any other related fields
 );
 
@@ -18,8 +19,7 @@ CREATE TABLE IF NOT EXISTS wp_posts (
     post_author INT,
     post_date DATETIME,
     post_content TEXT,
-    post_title VARCHAR(255),
-    annoy_index INT
+    post_title VARCHAR(255)
     -- Add other necessary columns as per your schema
 );
 

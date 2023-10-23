@@ -16,7 +16,6 @@ set(SOURCE_FILES
     src/mysql_vss.cc 
     src/vss_search.cc
     src/vss_version.cc
-    src/vss_update.cc
 )
 
 # Include directories

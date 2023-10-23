@@ -17,11 +17,6 @@ extern "C"
                     unsigned long *length, char *is_null, char *error);
   bool vss_version_init(UDF_INIT *initid, UDF_ARGS *args, char *message);
   void vss_version_deinit(UDF_INIT *initid);
-
-  long long *vss_update(UDF_INIT *initid, UDF_ARGS *args,
-                        char *is_null, char *error);
-  bool vss_update_init(UDF_INIT *initid, UDF_ARGS *args, char *message);
-  void vss_update_deinit(UDF_INIT *initid);
 }
 
 #endif // VSS_PLUGIN_H

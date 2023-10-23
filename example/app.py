@@ -36,20 +36,27 @@ try:
     # Commit the changes to the database
     db_connection.commit()
 
+    query = "Do you have any content about sea creatures?"
     # Generate an embedding for the query
-    query_embedding = generate_embeddings(
-        "Do you have any content about sea creatures?")
+    query_embedding = generate_embeddings(query)
 
-    # Use the combined SQL query to fetch post content, its embedding, and compute the
-    # cosine similarity score, then sort the results
+    # Look up the original content from the source embeddings table using the query vector embedding
     combined_query = f"""
     SELECT 
-        vss_search('{json.dumps(query_embedding)}') AS matched_index
+        e.original_text
+    FROM 
+        embeddings AS e
+    WHERE 
+        e.ID = vss_search('{json.dumps(query_embedding)}')
     """
 
     cursor.execute(combined_query)
     result = cursor.fetchone()
-    print(f"Matched index from Annoy: {result[0]}")
+    print(f"QUERY: {query}")
+    if result:
+        print(f"RESULT: {result[0]}")
+    else:
+        print("No match found.")
 
 
 except mysql.connector.Error as err:

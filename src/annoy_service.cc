@@ -19,6 +19,7 @@ AnnoyService::~AnnoyService()
   // Clean up resources if any
   if (annoy_index)
   {
+    annoy_index->unload();
     delete annoy_index;
     annoy_index = nullptr;
   }
@@ -64,7 +65,55 @@ double AnnoyService::get_closest(char *error, char *vector_arg, char *is_null)
   annoy_index->get_nns_by_vector(v, 1, -1, &closest_items, NULL);
   int closest_item = closest_items[0];
 
-  return (double)closest_item; // For this example, we return the index of the most similar item
+  // Initialize MySQL client library
+  mysql_library_init(0, NULL, NULL);
+  MYSQL *conn = mysql_init(NULL);
+  if (!conn)
+  {
+    strcpy(error, "MySQL initialization failed.");
+    *is_null = 1;
+    return 0.0;
+  }
+
+  if (mysql_real_connect(conn, "localhost", "root", "password1234", "wordpress", 33060, NULL, 0) == NULL)
+  {
+    strcpy(error, mysql_error(conn));
+    mysql_close(conn);
+    *is_null = 1;
+    return 0.0;
+  }
+
+  char query[256];
+  snprintf(query, sizeof(query), "SELECT ID FROM embeddings WHERE annoy_index=%d", closest_item);
+
+  if (mysql_query(conn, query))
+  {
+    strcpy(error, mysql_error(conn));
+    mysql_close(conn);
+    *is_null = 1;
+    return 0.0;
+  }
+
+  MYSQL_RES *res = mysql_store_result(conn);
+  MYSQL_ROW row = mysql_fetch_row(res);
+
+  if (row == NULL)
+  {
+    strcpy(error, "No matching record found.");
+    *is_null = 1;
+    mysql_free_result(res);
+    mysql_close(conn);
+    return 0.0;
+  }
+
+  int result_id = atoi(row[0]);
+
+  // Cleanup
+  mysql_free_result(res);
+  mysql_close(conn);
+  mysql_library_end();
+
+  return (double)result_id;
 };
 
 bool AnnoyService::load_index(char *message)
@@ -129,7 +178,7 @@ void AnnoyService::populate_annoy_from_db()
   }
 
   // Execute SQL query to fetch data
-  if (mysql_query(conn, "SELECT vector FROM embeddings"))
+  if (mysql_query(conn, "SELECT ID, vector FROM embeddings"))
   {
     // Handle error
     fprintf(stderr, "SELECT error: %s\n", mysql_error(conn));
@@ -149,11 +198,11 @@ void AnnoyService::populate_annoy_from_db()
   int item_index = 0;
   while ((row = mysql_fetch_row(res)))
   {
-    // Assuming row[0] is a JSON string of the vector
+    int db_id = atoi(row[0]); // Convert the ID from string to integer
     json_t *root;
     json_error_t error;
 
-    root = json_loads(row[0], &error);
+    root = json_loads(row[1], &error); // Assuming row[1] is the vector
     if (!root)
     {
       fprintf(stderr, "Error parsing JSON input: %s\n", error.text);
@@ -172,6 +221,16 @@ void AnnoyService::populate_annoy_from_db()
     }
 
     annoy_index->add_item(item_index, item_data);
+
+    // Update the embeddings table with the Annoy index
+    char update_query[256];
+    snprintf(update_query, sizeof(update_query), "UPDATE embeddings SET annoy_index=%d WHERE ID=%d", item_index, db_id);
+    if (mysql_query(conn, update_query))
+    {
+      // Handle error
+      fprintf(stderr, "UPDATE error: %s\n", mysql_error(conn));
+    }
+
     item_index++;
 
     // Clean up the parsed JSON object
