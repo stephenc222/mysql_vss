@@ -1,10 +1,13 @@
 #include <fstream>
+#include <map>
 #include "mysql/plugin.h"
 #include "mysql.h"
 #include "jansson.h"
 #include "kissrandom.h"
 #include "annoylib.h"
 #include "include/annoy_service.h"
+
+const int CHUNK_SIZE = 1000;
 
 AnnoyService::AnnoyService() : annoy_index(nullptr) {}
 
@@ -157,88 +160,98 @@ void AnnoyService::populate_annoy_from_db()
 
   // Connect to database
   conn = mysql_init(NULL);
-  if (conn == NULL)
+  if (!conn)
   {
-    // Handle error
     fprintf(stderr, "mysql_init() failed\n");
     return;
   }
 
-  // TODO: refactor the database connection to either:
-  // 1. use the internal MySQL API to perform a SQL query
-  // 2. Read from a reliable configuration source to authenticate this connection
-  // FIXME: regardless of how this query is handled, ensure that any errors are handled
-  // Could be fatal to the MySQL server otherwise
   if (mysql_real_connect(conn, "localhost", "root", "password1234", "wordpress", 33060, NULL, 0) == NULL)
   {
-    // Handle error
     fprintf(stderr, "mysql_real_connect() failed\n");
     mysql_close(conn);
     return;
   }
 
-  // Execute SQL query to fetch data
-  if (mysql_query(conn, "SELECT ID, vector FROM embeddings"))
+  // Determine total number of rows
+  if (mysql_query(conn, "SELECT COUNT(*) FROM embeddings"))
   {
-    // Handle error
-    fprintf(stderr, "SELECT error: %s\n", mysql_error(conn));
+    fprintf(stderr, "COUNT query error: %s\n", mysql_error(conn));
     mysql_close(conn);
     return;
   }
 
   res = mysql_store_result(conn);
-  if (res == NULL)
-  {
-    // Handle error
-    fprintf(stderr, "mysql_store_result() failed\n");
-    mysql_close(conn);
-    return;
-  }
+  MYSQL_ROW countRow = mysql_fetch_row(res);
+  int totalRows = atoi(countRow[0]);
+  mysql_free_result(res);
 
-  int item_index = 0;
-  while ((row = mysql_fetch_row(res)))
-  {
-    int db_id = atoi(row[0]); // Convert the ID from string to integer
-    json_t *root;
-    json_error_t error;
+  int totalChunks = (totalRows + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
-    root = json_loads(row[1], &error); // Assuming row[1] is the vector
-    if (!root)
+  for (int chunk = 0; chunk < totalChunks; chunk++)
+  {
+    int offset = chunk * CHUNK_SIZE;
+    char selectSQL[256];
+    snprintf(selectSQL, sizeof(selectSQL), "SELECT ID, vector FROM embeddings LIMIT %d OFFSET %d", CHUNK_SIZE, offset);
+
+    if (mysql_query(conn, selectSQL))
     {
-      fprintf(stderr, "Error parsing JSON input: %s\n", error.text);
-      continue; // Go to the next row
+      fprintf(stderr, "SELECT error: %s\n", mysql_error(conn));
+      continue;
     }
 
-    double item_data[EMBEDDING_DIM];
-    for (int i = 0; i < EMBEDDING_DIM; i++)
+    res = mysql_use_result(conn);
+    std::map<int, int> updateMap; // Map of item_index to db_id for the current chunk
+    int item_index = offset;
+
+    while ((row = mysql_fetch_row(res)))
     {
-      if (!json_is_real(json_array_get(root, i)))
+      int db_id = atoi(row[0]);
+      json_t *root;
+      json_error_t error;
+
+      root = json_loads(row[1], &error);
+      if (!root)
       {
-        fprintf(stderr, "Invalid or missing values in JSON arrays.\n");
-        break; // Break from the loop processing this embedding
+        fprintf(stderr, "Error parsing JSON input: %s\n", error.text);
+        continue;
       }
-      item_data[i] = json_real_value(json_array_get(root, i));
+
+      double item_data[EMBEDDING_DIM];
+      for (int i = 0; i < EMBEDDING_DIM; i++)
+      {
+        if (!json_is_real(json_array_get(root, i)))
+        {
+          fprintf(stderr, "Invalid or missing values in JSON arrays.\n");
+          break;
+        }
+        item_data[i] = json_real_value(json_array_get(root, i));
+      }
+
+      annoy_index->add_item(item_index, item_data);
+      updateMap[item_index] = db_id;
+
+      item_index++;
+      json_decref(root);
     }
 
-    annoy_index->add_item(item_index, item_data);
-
-    // Update the embeddings table with the Annoy index
-    char update_query[256];
-    snprintf(update_query, sizeof(update_query), "UPDATE embeddings SET annoy_index=%d WHERE ID=%d", item_index, db_id);
-    if (mysql_query(conn, update_query))
+    // Construct the batch update SQL for the current chunk
+    std::string updateSQL = "UPDATE embeddings SET annoy_index = CASE ID ";
+    for (const auto &pair : updateMap)
     {
-      // Handle error
+      updateSQL += "WHEN " + std::to_string(pair.second) + " THEN " + std::to_string(pair.first) + " ";
+    }
+    updateSQL += "ELSE annoy_index END";
+
+    // Execute the batch update for the current chunk
+    if (mysql_query(conn, updateSQL.c_str()))
+    {
       fprintf(stderr, "UPDATE error: %s\n", mysql_error(conn));
     }
 
-    item_index++;
-
-    // Clean up the parsed JSON object
-    json_decref(root);
+    mysql_free_result(res);
   }
 
-  // Cleanup
-  mysql_free_result(res);
   mysql_close(conn);
   mysql_library_end();
 }
