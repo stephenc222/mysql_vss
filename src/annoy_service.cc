@@ -1,5 +1,3 @@
-#include <fstream>
-#include <map>
 #include "mysql/plugin.h"
 #include "mysql.h"
 #include "jansson.h"
@@ -9,7 +7,31 @@
 
 const int CHUNK_SIZE = 1000;
 
-AnnoyService::AnnoyService() : annoy_index(nullptr) {}
+std::map<std::string, std::string> readConfig(const std::string &filename)
+{
+  std::ifstream file(filename);
+  std::map<std::string, std::string> configMap;
+
+  std::string line;
+  while (std::getline(file, line))
+  {
+    std::istringstream is_line(line);
+    std::string key;
+    if (std::getline(is_line, key, '='))
+    {
+      std::string value;
+      if (std::getline(is_line, value))
+        configMap[key] = value;
+    }
+  }
+
+  return configMap;
+}
+
+AnnoyService::AnnoyService() : annoy_index(nullptr)
+{
+  dbConfig = readConfig("mysql_vss_config.ini");
+}
 
 AnnoyService &AnnoyService::getInstance()
 {
@@ -78,7 +100,13 @@ double AnnoyService::get_closest(char *error, char *vector_arg, char *is_null)
     return 0.0;
   }
 
-  if (mysql_real_connect(conn, "localhost", "root", "password1234", "wordpress", 33060, NULL, 0) == NULL)
+  const char *db_host = dbConfig["host"].c_str();
+  const char *db_user = dbConfig["user"].c_str();
+  const char *db_pass = dbConfig["password"].c_str();
+  const char *db_name = dbConfig["name"].c_str();
+  unsigned int db_port = std::stoi(dbConfig["port"]);
+
+  if (mysql_real_connect(conn, db_host, db_user, db_pass, db_name, db_port, NULL, 0) == NULL)
   {
     strcpy(error, mysql_error(conn));
     mysql_close(conn);
@@ -165,8 +193,13 @@ void AnnoyService::populate_annoy_from_db()
     fprintf(stderr, "mysql_init() failed\n");
     return;
   }
+  const char *db_host = dbConfig["host"].c_str();
+  const char *db_user = dbConfig["user"].c_str();
+  const char *db_pass = dbConfig["password"].c_str();
+  const char *db_name = dbConfig["name"].c_str();
+  unsigned int db_port = std::stoi(dbConfig["port"]);
 
-  if (mysql_real_connect(conn, "localhost", "root", "password1234", "wordpress", 33060, NULL, 0) == NULL)
+  if (mysql_real_connect(conn, db_host, db_user, db_pass, db_name, db_port, NULL, 0) == NULL)
   {
     fprintf(stderr, "mysql_real_connect() failed\n");
     mysql_close(conn);

@@ -1,12 +1,14 @@
 #ifndef ANNOY_SERVICE_H
 #define ANNOY_SERVICE_H
 
+#include <fstream>
+#include <map>
+#include <sstream>
 #include "mysql/plugin.h"
 #include "mysql.h"
 #include "jansson.h"
 #include "kissrandom.h"
 #include "annoylib.h"
-#include <fstream>
 
 #ifndef EMBEDDING_DIM
 #define EMBEDDING_DIM 768
@@ -21,6 +23,9 @@ using namespace Annoy;
 class AnnoyService
 {
 private:
+  // NOTE: quick-fix solution for database configuration for SQL queries. Alternative
+  // could be using the internal MySQL C API, leveraging the execution context to create statements
+  std::map<std::string, std::string> dbConfig;
   Annoy::AnnoyIndex<int, double, Annoy::Angular, Annoy::Kiss32Random, Annoy::AnnoyIndexSingleThreadedBuildPolicy> *annoy_index;
   AnnoyService();
   AnnoyService(const AnnoyService &) = delete;
