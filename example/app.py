@@ -40,24 +40,35 @@ try:
     # Generate an embedding for the query
     query_embedding = generate_embeddings(query)
 
-    # Look up the original content from the source embeddings table using the query vector embedding
+    # Get the list of closest embedding IDs
+    id_query = f"SELECT CAST(vss_search('{json.dumps(query_embedding)}') as CHAR)"
+    cursor.execute(id_query)
+    id_result = cursor.fetchone()[0]
+
+    # Split the result into individual IDs
+    ids = id_result.split(',')
+
+    # Look up the original content from the source embeddings table using the retrieved IDs
     combined_query = f"""
     SELECT 
         e.original_text
     FROM 
         embeddings AS e
     WHERE 
-        e.ID = vss_search('{json.dumps(query_embedding)}')
+        e.ID IN ({','.join(ids)})
+    ORDER BY
+        FIELD(e.ID, {','.join(ids)})
     """
 
     cursor.execute(combined_query)
-    result = cursor.fetchone()
-    print(f"QUERY: {query}")
-    if result:
-        print(f"RESULT: {result[0]}")
-    else:
-        print("No match found.")
+    results = cursor.fetchall()
 
+    print(f"QUERY: {query}")
+    if results:
+        for idx, row in enumerate(results):
+            print(f"TOP RESULT {idx + 1}: {row[0]}")
+    else:
+        print("No matches found.")
 
 except mysql.connector.Error as err:
     print("Error:", err)

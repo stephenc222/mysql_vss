@@ -34,7 +34,7 @@ private:
 public:
   static AnnoyService &getInstance();
   ~AnnoyService();
-  double get_closest(char *error, char *vector_arg, char *is_null);
+  char *get_closest(char *error, char *vector_arg, char *result, unsigned long *length, char *is_null);
   bool load_index(char *message);
   void populate_annoy_from_db();
 };

@@ -6,6 +6,7 @@
 #include "include/annoy_service.h"
 
 const int CHUNK_SIZE = 1000;
+const int RESULT_LIST_SIZE = 10;
 
 std::map<std::string, std::string> readConfig(const std::string &filename)
 {
@@ -50,24 +51,22 @@ AnnoyService::~AnnoyService()
   }
 }
 
-double AnnoyService::get_closest(char *error, char *vector_arg, char *is_null)
+char *AnnoyService::get_closest(char *error, char *vector_arg, char *result, unsigned long *length, char *is_null)
 {
   // Parse the JSON vector
   json_t *root;
   json_error_t error1;
 
   root = json_loads(vector_arg, &error1);
-
   if (!root)
   {
     strcpy(error, "Error parsing JSON input.");
     *is_null = 1;
-    return 0.0;
+    return NULL;
   }
 
   // Convert JSON vector to model
   double v[EMBEDDING_DIM];
-
   for (int i = 0; i < EMBEDDING_DIM; i++)
   {
     if (!json_is_real(json_array_get(root, i)))
@@ -75,20 +74,15 @@ double AnnoyService::get_closest(char *error, char *vector_arg, char *is_null)
       strcpy(error, "Invalid or missing values in JSON array.");
       *is_null = 1;
       json_decref(root);
-      return 0.0;
+      return NULL;
     }
     v[i] = json_real_value(json_array_get(root, i));
   }
-
-  // Clean up the parsed JSON object
   json_decref(root);
 
-  // Use Annoy index to get the most similar vector
-
+  // Use Annoy index to get the top 10 most similar vectors
   std::vector<int> closest_items;
-  // std::vector<double> distances; // If you want the distances, otherwise this can be omitted
-  annoy_index->get_nns_by_vector(v, 1, -1, &closest_items, NULL);
-  int closest_item = closest_items[0];
+  annoy_index->get_nns_by_vector(v, RESULT_LIST_SIZE, -1, &closest_items, NULL);
 
   // Initialize MySQL client library
   mysql_library_init(0, NULL, NULL);
@@ -97,7 +91,7 @@ double AnnoyService::get_closest(char *error, char *vector_arg, char *is_null)
   {
     strcpy(error, "MySQL initialization failed.");
     *is_null = 1;
-    return 0.0;
+    return NULL;
   }
 
   const char *db_host = dbConfig["host"].c_str();
@@ -111,41 +105,49 @@ double AnnoyService::get_closest(char *error, char *vector_arg, char *is_null)
     strcpy(error, mysql_error(conn));
     mysql_close(conn);
     *is_null = 1;
-    return 0.0;
+    return NULL;
   }
 
-  char query[256];
-  snprintf(query, sizeof(query), "SELECT ID FROM embeddings WHERE annoy_index=%d", closest_item);
-
-  if (mysql_query(conn, query))
+  // Fetch the IDs for the closest items and pack them into the result buffer
+  std::string id_list;
+  for (int item_id : closest_items)
   {
-    strcpy(error, mysql_error(conn));
-    mysql_close(conn);
-    *is_null = 1;
-    return 0.0;
-  }
+    char query[256];
+    snprintf(query, sizeof(query), "SELECT ID FROM embeddings WHERE annoy_index=%d", item_id);
 
-  MYSQL_RES *res = mysql_store_result(conn);
-  MYSQL_ROW row = mysql_fetch_row(res);
+    if (mysql_query(conn, query))
+    {
+      strcpy(error, mysql_error(conn));
+      continue;
+    }
 
-  if (row == NULL)
-  {
-    strcpy(error, "No matching record found.");
-    *is_null = 1;
+    MYSQL_RES *res = mysql_store_result(conn);
+    MYSQL_ROW row = mysql_fetch_row(res);
+
+    if (row)
+    {
+      id_list += row[0];
+      id_list += ",";
+    }
+
     mysql_free_result(res);
-    mysql_close(conn);
-    return 0.0;
   }
 
-  int result_id = atoi(row[0]);
+  // Remove trailing comma
+  if (!id_list.empty())
+  {
+    id_list.pop_back();
+  }
 
-  // Cleanup
-  mysql_free_result(res);
+  // Copy the ID list into the result buffer and set its length
+  strncpy(result, id_list.c_str(), id_list.size());
+  *length = id_list.size();
+
   mysql_close(conn);
   mysql_library_end();
 
-  return (double)result_id;
-};
+  return result; // Indicate success
+}
 
 bool AnnoyService::load_index(char *message)
 {

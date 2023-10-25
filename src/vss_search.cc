@@ -12,20 +12,21 @@ extern "C"
   // To be able to directly deallocate on uninstall plugin?
   // Global Annoy index variable
 
-  double vss_search(UDF_INIT *initid, UDF_ARGS *args,
-                    char *is_null, char *error)
+  char *vss_search(UDF_INIT *initid, UDF_ARGS *args,
+                   char *result, unsigned long *length,
+                   char *is_null, char *error)
   {
 
     if (args->arg_count != 1)
     {
       strcpy(error, "One string argument (vector) is required.");
       *is_null = 1;
-      return 0.0;
+      return NULL;
     }
 
     AnnoyService &populator = AnnoyService::getInstance();
 
-    return populator.get_closest(error, args->args[0], is_null);
+    return populator.get_closest(error, args->args[0], result, length, is_null);
   }
 
   bool vss_search_init(UDF_INIT *initid, UDF_ARGS *args, char *message)

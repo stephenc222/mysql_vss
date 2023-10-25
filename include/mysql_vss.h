@@ -9,7 +9,9 @@
 extern "C"
 {
 
-  double vss_search(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char *error);
+  char *vss_search(UDF_INIT *initid, UDF_ARGS *args,
+                   char *result, unsigned long *length,
+                   char *is_null, char *error);
   bool vss_search_init(UDF_INIT *initid, UDF_ARGS *args, char *message);
   void vss_search_deinit(UDF_INIT *initid);
 
