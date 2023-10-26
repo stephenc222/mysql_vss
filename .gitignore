@@ -1,6 +1,5 @@
 __pycache__
 
-mysql-server
 
 # Ignore CMake build files
 CMakeCache.txt

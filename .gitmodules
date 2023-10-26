@@ -1,3 +1,6 @@
 [submodule "src/vendor/annoy-1.17.3"]
 	path = src/vendor/annoy-1.17.3
 	url = git@github.com:spotify/annoy.git
+[submodule "src/vendor/mysql-server"]
+	path = src/vendor/mysql-server
+	url = git@github.com:mysql/mysql-server.git
