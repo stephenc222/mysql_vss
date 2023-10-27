@@ -1,1 +1,2 @@
-cmake . && make && mv ./libmysql_vss.so ./build/libmysql_vss.so
+# for on mac
+cmake . && make && mv ./libmysql_vss.dylib ./build/libmysql_vss.dylib
