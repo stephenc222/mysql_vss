@@ -4,6 +4,9 @@ CREATE DATABASE IF NOT EXISTS wordpress;
 -- Use the wordpress database
 USE wordpress;
 
+-- create our vss_search function
+CREATE FUNCTION vss_search RETURNS STRING SONAME 'libmysql_vss.so';
+
 -- our embeddings table (for our example app)
 CREATE TABLE IF NOT EXISTS embeddings (
     ID INT PRIMARY KEY,

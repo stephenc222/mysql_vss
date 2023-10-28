@@ -4,8 +4,8 @@ from embedding_util import generate_embeddings
 
 # Database connection parameters
 db_config = {
-    "host": "localhost",
-    "user": "root",
+    "host": "127.0.0.1",
+    "user": "mysql",
     "password": "password1234",
     "database": "wordpress",
     "port": 3306
