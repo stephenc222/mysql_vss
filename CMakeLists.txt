@@ -4,6 +4,28 @@ project(mysql_vss VERSION 0.0.1)
 
 set(MYSQL_VSS_VERSION ${PROJECT_VERSION})
 
+if(APPLE)
+    set(OS_NAME "macOS")
+elseif(UNIX AND EXISTS "/etc/system-release")
+    file(READ "/etc/system-release" OS_RELEASE)
+    if(OS_RELEASE MATCHES "Amazon Linux release 2023")
+        set(OS_NAME "AmazonLinux2023")
+    else()
+        set(OS_NAME "Linux")
+    endif()
+else()
+    set(OS_NAME "UnknownOS")
+endif()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64|x86_64")
+    set(CPU_ARCH "x86_64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    set(CPU_ARCH "arm_64")
+else()
+    set(CPU_ARCH "UnknownArch")
+endif()
+
+
 configure_file(${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/build/config.h)
 
 # Set C++ Standard
@@ -48,15 +70,17 @@ else()
 endif()
 
 
-# Link directories
-# link_directories(/usr/local/opt/openssl/lib)
-
 find_package(OpenSSL REQUIRED)
 
 
 # Add the plugin as a shared library
 add_library(mysql_vss MODULE ${SOURCE_FILES})
 target_compile_definitions(mysql_vss PRIVATE MYSQL_DYNAMIC_PLUGIN)
+
+# Set the output name to include version and operating system
+set_target_properties(mysql_vss PROPERTIES
+    OUTPUT_NAME "mysql_vss_v${MYSQL_VSS_VERSION}_${OS_NAME}_${CPU_ARCH}"
+)
 
 # Check if the compiler is GCC
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

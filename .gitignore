@@ -12,6 +12,7 @@ cmake_install.cmake
 # Ignore generated libraries and binaries
 *.a
 *.so
+*.dylib
 build/
 
 # Ignore Python cache files
