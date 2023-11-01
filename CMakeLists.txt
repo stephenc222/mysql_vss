@@ -77,6 +77,13 @@ find_package(OpenSSL REQUIRED)
 add_library(mysql_vss MODULE ${SOURCE_FILES})
 target_compile_definitions(mysql_vss PRIVATE MYSQL_DYNAMIC_PLUGIN)
 
+# Check the compiler and set the UTF-8 flags accordingly
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(mysql_vss PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(mysql_vss PRIVATE /utf-8)
+endif()
+
 # Set the output name to include version and operating system
 set_target_properties(mysql_vss PROPERTIES
     OUTPUT_NAME "mysql_vss_v${MYSQL_VSS_VERSION}_${OS_NAME}_${CPU_ARCH}"

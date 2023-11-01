@@ -87,6 +87,10 @@ char *AnnoyService::get_closest(char *error, char *vector_arg, char *result, uns
   // Initialize MySQL client library
   mysql_library_init(0, NULL, NULL);
   MYSQL *conn = mysql_init(NULL);
+
+  // Set the charset to UTF-8
+  mysql_options(conn, MYSQL_SET_CHARSET_NAME, "utf8");
+
   if (!conn)
   {
     strcpy(error, "MySQL initialization failed.");
@@ -195,6 +199,10 @@ void AnnoyService::populate_annoy_from_db()
     fprintf(stderr, "mysql_init() failed\n");
     return;
   }
+
+  // Set the charset to UTF-8
+  mysql_options(conn, MYSQL_SET_CHARSET_NAME, "utf8");
+
   const char *db_host = dbConfig["host"].c_str();
   const char *db_user = dbConfig["user"].c_str();
   const char *db_pass = dbConfig["password"].c_str();
