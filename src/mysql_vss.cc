@@ -1,5 +1,4 @@
 #include "include/mysql_vss.h"
-#include "mysql/plugin.h"
 
 // TODO: Consider how / if to combine a MySQL plugin to support the vss_search loadable function
 

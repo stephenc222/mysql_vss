@@ -1,8 +1,3 @@
-#include <fstream>
-#include <math.h>
-#include "mysql/plugin.h"
-#include "mysql.h"
-#include "jansson.h"
 #include "include/mysql_vss.h"
 
 extern "C"

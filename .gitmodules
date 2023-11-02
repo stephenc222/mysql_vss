@@ -4,3 +4,6 @@
 [submodule "src/vendor/mysql-server"]
 	path = src/vendor/mysql-server
 	url = git@github.com:mysql/mysql-server.git
+[submodule "src/vendor/rapidjson"]
+	path = src/vendor/rapidjson
+	url = git@github.com:Tencent/rapidjson.git

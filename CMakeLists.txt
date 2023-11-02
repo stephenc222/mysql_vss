@@ -53,8 +53,8 @@ if(APPLE)
         ${CMAKE_BINARY_DIR}/build
         ${CMAKE_SOURCE_DIR}/src/include
         /usr/local/opt/openssl/include
-        ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src
-        ${CMAKE_SOURCE_DIR}/src/vendor/annoy-1.17.3/src
+        ${CMAKE_SOURCE_DIR}/src/vendor
+        ${CMAKE_SOURCE_DIR}/src/vendor/rapidjson/include
         /Library/Frameworks/Python.framework/Headers/
     )
 else()
@@ -63,8 +63,8 @@ else()
         ${CMAKE_BINARY_DIR}/build
         ${CMAKE_SOURCE_DIR}/src/include
         /usr/include/openssl
-        ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src
-        ${CMAKE_SOURCE_DIR}/src/vendor/annoy-1.17.3/src
+        ${CMAKE_SOURCE_DIR}/src/vendor
+        ${CMAKE_SOURCE_DIR}/src/vendor/rapidjson/include
         /usr/include/python3.9
     )
 endif()
@@ -110,7 +110,6 @@ if(APPLE)
                 PATHS ${CMAKE_SOURCE_DIR}/src/vendor/mysql-server/build/lib
                 NO_DEFAULT_PATH)
 else()
-    # set(MYSQLCLIENT_LIBRARY ${CMAKE_SOURCE_DIR}/src/vendor/mysql-server/build/lib/libmysqlclient.so.21)
     set(MYSQLCLIENT_LIBRARY ${CMAKE_SOURCE_DIR}/src/vendor/mysql-server/build/archive_output_directory/libmysqlclient.a)
 endif()
 
@@ -124,21 +123,9 @@ set(ANNOY_FILES
 )
 add_library(annoy ${ANNOY_FILES})
 
-# Jansson library files
-set(JANSSON_FILES
-    ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src/dump.c
-    ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src/hashtable.c
-    ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src/load.c
-    ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src/strbuffer.c
-    ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src/utf.c
-    ${CMAKE_SOURCE_DIR}/src/vendor/jansson-1.0.1/src/value.c
-)
-add_library(jansson STATIC ${JANSSON_FILES})
-
 target_link_libraries(mysql_vss PRIVATE 
     ${OPENSSL_LIBRARIES}
     annoy
-    jansson
     ${MYSQLCLIENT_LIBRARY}
 )
 

@@ -6,6 +6,8 @@ MySQL plugin for storing and querying vector embeddings.
 
 TODO:
 
+The rapidjson C JSON parsing library works on arm and x86 - now cleanup (remove jansson from CMakeLists.txt, stop linking it, and remove it's code)
+
 To initialize the Git submodules currently containing Annoy from Spotify, use:
 
 ```bash

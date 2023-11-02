@@ -1,9 +1,6 @@
-#include "mysql/plugin.h"
-#include "mysql.h"
-#include "jansson.h"
-#include "kissrandom.h"
-#include "annoylib.h"
 #include "include/annoy_service.h"
+
+using namespace rapidjson;
 
 const int CHUNK_SIZE = 1000;
 const int RESULT_LIST_SIZE = 10;
@@ -54,11 +51,10 @@ AnnoyService::~AnnoyService()
 char *AnnoyService::get_closest(char *error, char *vector_arg, char *result, unsigned long *length, char *is_null)
 {
   // Parse the JSON vector
-  json_t *root;
-  json_error_t error1;
+  Document root;
+  root.Parse(vector_arg);
 
-  root = json_loads(vector_arg, &error1);
-  if (!root)
+  if (!root.IsArray())
   {
     strcpy(error, "Error parsing JSON input.");
     *is_null = 1;
@@ -67,18 +63,16 @@ char *AnnoyService::get_closest(char *error, char *vector_arg, char *result, uns
 
   // Convert JSON vector to model
   double v[EMBEDDING_DIM];
-  for (int i = 0; i < EMBEDDING_DIM; i++)
+  for (rapidjson::SizeType i = 0; i < EMBEDDING_DIM; i++)
   {
-    if (!json_is_real(json_array_get(root, i)))
+    if (!root[i].IsDouble())
     {
       strcpy(error, "Invalid or missing values in JSON array.");
       *is_null = 1;
-      json_decref(root);
       return NULL;
     }
-    v[i] = json_real_value(json_array_get(root, i));
+    v[i] = root[i].GetDouble();
   }
-  json_decref(root);
 
   // Use Annoy index to get the top 10 most similar vectors
   std::vector<int> closest_items;
@@ -250,32 +244,30 @@ void AnnoyService::populate_annoy_from_db()
     while ((row = mysql_fetch_row(res)))
     {
       int db_id = atoi(row[0]);
-      json_t *root;
-      json_error_t error;
+      rapidjson::Document root;
 
-      root = json_loads(row[1], &error);
-      if (!root)
+      root.Parse(row[1]);
+      if (root.HasParseError())
       {
-        fprintf(stderr, "Error parsing JSON input: %s\n", error.text);
+        fprintf(stderr, "Error parsing JSON input: %s\n", rapidjson::GetParseError_En(root.GetParseError()));
         continue;
       }
 
       double item_data[EMBEDDING_DIM];
-      for (int i = 0; i < EMBEDDING_DIM; i++)
+      for (rapidjson::SizeType i = 0; i < EMBEDDING_DIM; i++)
       {
-        if (!json_is_real(json_array_get(root, i)))
+        if (!root[i].IsDouble())
         {
           fprintf(stderr, "Invalid or missing values in JSON arrays.\n");
           break;
         }
-        item_data[i] = json_real_value(json_array_get(root, i));
+        item_data[i] = root[i].GetDouble();
       }
 
       annoy_index->add_item(item_index, item_data);
       updateMap[item_index] = db_id;
 
       item_index++;
-      json_decref(root);
     }
 
     // Construct the batch update SQL for the current chunk

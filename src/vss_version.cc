@@ -1,5 +1,5 @@
 #include <mysql/plugin.h>
-#include "config.h" 
+#include "config.h"
 
 extern "C"
 {

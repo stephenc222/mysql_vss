@@ -4,8 +4,8 @@
             "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/src/vendor/mysql-server/include",
-                "${workspaceFolder}/src/vendor/annoy-1.17.3/src",
+                "${workspaceFolder}/src/vendor",
+                "${workspaceFolder}/src/vendor/rapidjson/include",
                 "${workspaceFolder}/include",
                 "${workspaceFolder}/build",
                 "/Library/Frameworks/Python.framework/Headers/"

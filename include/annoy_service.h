@@ -6,10 +6,14 @@
 #include <sstream>
 #include "mysql/plugin.h"
 #include "mysql.h"
-#include "jansson.h"
-#include "kissrandom.h"
-#include "annoylib.h"
+#include "annoy-1.17.3/src/kissrandom.h"
+#include "annoy-1.17.3/src/annoylib.h"
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
 
+// FIXME: either dynamically pull this while loading the index or make it configurable
+// during UDF function creation. Currently will only work for an embedding model that
+// outputs vectors with 768 dimensions.
 #ifndef EMBEDDING_DIM
 #define EMBEDDING_DIM 768
 #endif

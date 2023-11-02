@@ -1,9 +1,12 @@
 #ifndef VSS_PLUGIN_H
 #define VSS_PLUGIN_H
 
+#include <fstream>
+#include <math.h>
+#include "mysql.h"
 #include <mysql/plugin.h>
-#include "annoylib.h"
-#include "kissrandom.h"
+#include "annoy-1.17.3/src/annoylib.h"
+#include "annoy-1.17.3/src/kissrandom.h"
 #include "include/annoy_service.h"
 
 extern "C"
