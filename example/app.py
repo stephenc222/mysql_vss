@@ -27,7 +27,7 @@ try:
 
         # Insert the generated embedding into the embeddings table
         insert_query = """
-        INSERT INTO embeddings (ID, vector, original_text)
+        INSERT IGNORE INTO embeddings (ID, vector, original_text)
         VALUES (%s, %s, %s);
         """
         cursor.execute(
@@ -40,27 +40,21 @@ try:
     # Generate an embedding for the query
     query_embedding = generate_embeddings(query)
 
-    # Get the list of closest embedding IDs
-    id_query = f"SELECT CAST(vss_search('{json.dumps(query_embedding)}') as CHAR)"
-    cursor.execute(id_query)
-    id_result = cursor.fetchone()[0]
-
-    # Split the result into individual IDs
-    ids = id_result.split(',')
+    query_embedding_str = json.dumps(query_embedding)
 
     # Look up the original content from the source embeddings table using the retrieved IDs
-    combined_query = f"""
+    combined_query = """
     SELECT 
         e.original_text
     FROM 
         embeddings AS e
     WHERE 
-        e.ID IN ({','.join(ids)})
+        FIND_IN_SET(e.ID, (SELECT CAST(vss_search(%s) AS CHAR))) > 0
     ORDER BY
-        FIELD(e.ID, {','.join(ids)})
+        FIELD(e.ID, (SELECT CAST(vss_search(%s) AS CHAR)))
     """
 
-    cursor.execute(combined_query)
+    cursor.execute(combined_query, (query_embedding_str, query_embedding_str))
     results = cursor.fetchall()
 
     print(f"QUERY: {query}")
