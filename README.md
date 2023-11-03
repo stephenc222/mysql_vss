@@ -1,80 +1,128 @@
 # MySQL VSS
 
-MySQL plugin for storing and querying vector embeddings.
+`mysql_vss` is a plugin designed for storing and searching vector embeddings using approximate nearest neighbor search, leveraging the [Annoy](https://github.com/spotify/annoy) library for fast lookups in high-dimensional spaces.
 
-## Getting Started
+🚧 **Experimental Stage**: The plugin is experimental and not recommended for production use yet.
 
-TODO:
+## Setup
 
-The rapidjson C JSON parsing library works on arm and x86 - now cleanup (remove jansson from CMakeLists.txt, stop linking it, and remove it's code)
+### Prerequisites
 
-To initialize the Git submodules currently containing Annoy from Spotify, use:
+- Install recent versions of `gcc` and `g++`.
+- Ensure necessary build tools and libraries are installed. These include:
+  - g++
+  - gcc
+  - libstdc++-static
+  - cmake
+  - openssl-devel
+  - python-devel
+  - ncurses-devel
+
+### Building the Plugin
+
+1. Clone the repository:
 
 ```bash
-git submodule update --init --recursive
+git clone https://github.com/stephenc222/mysql_vss
+cd mysql_vss
 ```
 
-Use the seed script to initialize our test database:
+2. Initialize and update submodules:
 
 ```bash
-./bin/mysql -u root -p  < ../plugin/mysql_vss/seed_data.sql
+git submodule update --init --recursive --progress
 ```
 
-Run to create our custom loadable functions:
+3. Compile `mysql-server`. This plugin requires a `mysql-server` build from source to link against:
+
+```bash
+cd src/vendor/mysql-server
+mkdir build
+cd build
+cmake ..
+make
+```
+
+\*NOTE: `mysql_vss` uses `mysql-server` version 8.0, and this is pegged in the `mysql-server` git submodule. There will be additional packages you'll need to install, such as a modern version of `bison` and others. CMake's output is pretty helpful in determining what you need
+
+4. Compile the `mysql-vss` plugin source:
+
+```bash
+cmake .
+make
+```
+
+The compiled output is a shared library named something like `libmysql_vss_v0.0.1_AmazonLinux2023_x86_64.so`, tailored to your operating system.
+
+### Deploying the Plugin
+
+1. Deploy the shared library to MySQL's plugin directory.
+2. Register the UDFs in MySQL:
 
 ```sql
-CREATE FUNCTION vss_version RETURNS STRING SONAME 'mysql_vss.so';
-CREATE FUNCTION vss_search RETURNS REAL SONAME 'mysql_vss.so';
+CREATE FUNCTION vss_search RETURNS STRING SONAME 'libmysql_vss.so';
+CREATE FUNCTION vss_version RETURNS STRING SONAME 'libmysql_vss.so';
 ```
 
-To check if the plugin was installed correctly:
+## Usage
+
+### Verification
+
+Verify installation by checking the plugin version:
 
 ```sql
-select CAST(vss_version() AS CHAR(100));
+SELECT CAST(vss_version() AS CHAR);
 ```
 
-Should return:
+### Schema Setup
 
-```lang-none
-+----------------------------------+
-| CAST(vss_version() AS CHAR(100)) |
-+----------------------------------+
-| 1.0.0                            |
-+----------------------------------+
-1 row in set (0.00 sec)
-```
-
-Testing the `vss_search` loadable function:
+Set up the `embeddings` table as per the required schema (currently a manual process):
 
 ```sql
-select CAST(vss_search('[1.0, 2.0, 3.0]', '[1.0, 2.0, 4.0]') AS CHAR(100));
+CREATE TABLE IF NOT EXISTS embeddings (
+    ID INT PRIMARY KEY,
+    vector JSON NOT NULL,
+    original_text TEXT NOT NULL,
+    annoy_index INT
+);
 ```
 
-```lang-none
-+---------------------------------------------------------------------+
-| CAST(vss_search('[1.0, 2.0, 3.0]', '[1.0, 2.0, 4.0]') AS CHAR(100)) |
-+---------------------------------------------------------------------+
-| 0.991460                                                            |
-+---------------------------------------------------------------------+
-1 row in set (0.01 sec)
+### Performing Searches
+
+Use `vss_search` for querying similar embeddings:
+
+```sql
+SELECT e.original_text
+FROM embeddings AS e
+WHERE FIND_IN_SET(e.ID, CAST(vss_search('[0.01,0.02,0.03,...]') AS CHAR)) > 0
+ORDER BY FIELD(e.ID, CAST(vss_search('[0.01,0.02,0.03,...]') AS CHAR)) DESC;
 ```
 
-Another example assuming query_embedding is a JSON array representing a vector embedding:
+## Known Issues and Future Enhancements
 
-```python
-    # Use the combined SQL query to fetch post content, its embedding, and compute the
-    # cosine similarity score, then sort the results
-    combined_query = f"""
-    SELECT
-        ID,
-        original_text,
-        vss_search('{json.dumps(query_embedding)}', vector) AS similarity_score
-    FROM
-        embeddings
-    ORDER BY
-        similarity_score DESC;
-    """
-    cursor.execute(combined_query)
-    sorted_results = cursor.fetchall()
+### Embedding Dimensions
 
-```
+- The current version only supports 768-dimensional embeddings. `mysql_vss` was developed using the embedding model, [gte-base](https://huggingface.co/thenlper/gte-base), a top performing embedding model that is runnable on a wide variety of consumer hardware.
+
+### Annoy Index Management
+
+- The Annoy Index loads once and requires a manual update for new embeddings.
+
+### Data Scaling
+
+To enhance `mysql_vss` for larger data scales, some possible future development considerations include:
+
+- **External Process Management**: Isolate the Annoy Index to manage memory separately from MySQL.
+- **Dynamic Index Reloading**: Enable index updates without restarting the service.
+
+Additionally, configurations that you can take as well:
+
+- **Containerization**: Apply memory quotas to contain the Annoy Index within resource limits.
+- **MySQL Optimization**: Tweak MySQL configurations for larger datasets (e.g., `innodb_buffer_pool_size`).
+- **Performance Benchmarks**: Test against various data sizes to determine performance and stability.
+
+### Testing
+
+- Expand testing to include unit and integration tests for robust validation.
+
+Check out `examples/app.py` and the provided Dockerfile in the repository for demonstration and containerized deployment of `mysql_vss`.

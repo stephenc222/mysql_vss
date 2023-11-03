@@ -51,7 +51,7 @@ try:
     WHERE 
         FIND_IN_SET(e.ID, (SELECT CAST(vss_search(%s) AS CHAR))) > 0
     ORDER BY
-        FIELD(e.ID, (SELECT CAST(vss_search(%s) AS CHAR)))
+        FIELD(e.ID, (SELECT CAST(vss_search(%s) AS CHAR))) DESC
     """
 
     cursor.execute(combined_query, (query_embedding_str, query_embedding_str))
