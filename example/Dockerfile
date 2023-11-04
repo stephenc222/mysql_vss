@@ -12,21 +12,32 @@ RUN wget https://dev.mysql.com/get/mysql80-community-release-el9-1.noarch.rpm
 
 RUN dnf install mysql80-community-release-el9-1.noarch.rpm -y
 RUN dnf install mysql-community-server -y
-RUN dnf install -y findutils
 
 # Create a temporary data directory
 RUN mkdir -p /var/lib/mysql
 RUN mkdir -p /var/lib/mysqld
-RUN mkdir -p /temp-mysql-data
-RUN chown -R mysql:mysql /temp-mysql-data
 RUN chown -R mysql:mysql /var/lib/mysql
 RUN chown -R mysql:mysql /var/run/mysqld
+
+# Define the base URL for the GitHub release
+ARG BASE_URL="https://github.com/stephenc222/mysql_vss/releases/download/v0.0.1"
+
+# Automatically detect the architecture and download the correct file, then rename it to libmysql_vss.so
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+      FILE_URL="${BASE_URL}/libmysql_vss_v0.0.1_AmazonLinux2023_x86_64.so"; \
+    elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+      FILE_URL="${BASE_URL}/libmysql_vss_v0.0.1_AmazonLinux2023_arm_64.so"; \
+    else \
+      echo "Architecture not supported" >&2; \
+      exit 1; \
+    fi && \
+    wget -O libmysql_vss.so "$FILE_URL" && \
+    mv libmysql_vss.so /usr/lib64/mysql/plugin/
 
 # Copy the custom configuration file
 COPY mysql_vss_config.ini /tmp/
 COPY example_init.sql /tmp/
-# Copy the plugin .so file into the plugin directory
-COPY libmysql_vss.so /usr/lib64/mysql/plugin/
 
 # Expose the default MySQL port
 EXPOSE 3306 33060

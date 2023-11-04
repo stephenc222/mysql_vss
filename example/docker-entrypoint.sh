@@ -28,10 +28,8 @@ if [ ! -d "/var/lib/mysql/mysql" ]; then
     if [ -n "$MYSQL_USER" ] && [ -n "$MYSQL_PASSWORD" ] && [ -n "$MYSQL_DATABASE" ]; then
         echo "Creating user and granting permissions..."
         mysql --protocol=socket -uroot -e "CREATE USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD'"
-        # mysql --protocol=socket -uroot -e "GRANT ALL ON \`${MYSQL_DATABASE//_/\\_}\`.* TO '$MYSQL_USER'@'%'"
         mysql --protocol=socket -uroot -e "GRANT ALL PRIVILEGES ON mysql.* TO 'mysql'@'%' WITH GRANT OPTION"
         mysql --protocol=socket -uroot -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE//_/\\_}\`.* TO '$MYSQL_USER'@'%' WITH GRANT OPTION"
-        # mysql --protocol=socket -uroot -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE//_/\\_}\`.* TO '$MYSQL_USER'@'%'"
         mysql --protocol=socket -uroot -e "FLUSH PRIVILEGES"
 
     else
